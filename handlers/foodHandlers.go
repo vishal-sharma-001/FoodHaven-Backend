@@ -1,7 +1,12 @@
 package handlers
 
-import("net/http")
+import (
+	"fmt"
+	"net/http"
+)
+
+
 
 func GetFoodList(w http.ResponseWriter, r *http.Request){
-	
+	fmt.Println("Food List......")
 }

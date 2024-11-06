@@ -1,1 +1,1 @@
-package foodModel
+package models
