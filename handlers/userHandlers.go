@@ -6,7 +6,8 @@ import (
 	"log"
 	"net/http"
 
-	models "github.com/vishal-sharma-001/FoodHaven-backend.git/models"
+	db "github.com/vishal-sharma-001/FoodHaven-Backend/database"
+	models "github.com/vishal-sharma-001/FoodHaven-Backend/models"
 )
 
 type CustomUIResponse struct {
@@ -22,17 +23,22 @@ func setupResponse(w *http.ResponseWriter, req *http.Request) {
 	(*w).Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization")
 }
 
-
-func GetUsers(w http.ResponseWriter, r *http.Request){
+func GetUsers(w http.ResponseWriter, r *http.Request) {
 	setupResponse(&w, r)
 
 	var (
-		err          error
-		response     CustomUIResponse
+		err       error
+		response  CustomUIResponse
 		usersList []models.Users
 	)
 
+	dbClient, err := db.ConnectDB()
+	if err != nil {
+		fmt.Printf("Could not connect to the database: %v", err)
+	}
 
+	defer dbClient.Close()
+	
 	usersList, err = fetchUsersList(dbClient)
 	if err != nil {
 		response.Message = fmt.Sprintf("Error fetching warnings list. Error: [%s]", err.Error())
@@ -46,8 +52,8 @@ func GetUsers(w http.ResponseWriter, r *http.Request){
 	WriteSuccessMessage(w, r, response)
 }
 
-func fetchUsersList( dbclient *sql.DB) ([]models.Users, error){
+func fetchUsersList(dbclient *sql.DB) ([]models.Users, error) {
 	var usersList []models.Users
-	
+
 	return usersList, nil
 }

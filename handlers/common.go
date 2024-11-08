@@ -1,27 +1,15 @@
 package handlers
 
 import (
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"net/http"
-
-	db "github.com/vishal-sharma-001/FoodHaven-backend.git/database"
 )
 
-var dbClient *sql.DB
 var SUCCESS_STRING = "Success"
-func init(){
-	var err error
-	dbClient, err = db.ConnectDB()
-	if err != nil {
-		fmt.Printf("Could not connect to the database: %v", err)
-	}
-	defer dbClient.Close()
-}
 
 func WriteError(w http.ResponseWriter, r *http.Request, code int, errresp interface{}) {
-	fmt.Errorf(
+	fmt.Printf(
 		"%s %s %v",
 		r.Method,
 		r.RequestURI,
@@ -35,7 +23,6 @@ func WriteError(w http.ResponseWriter, r *http.Request, code int, errresp interf
 	}
 	w.Write(body)
 }
-
 
 func WriteSuccessMessage(w http.ResponseWriter, r *http.Request, data interface{}) {
 	fmt.Printf(

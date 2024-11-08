@@ -4,28 +4,29 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/go-acme/lego/log"
 	"github.com/gorilla/mux"
 
-	// "github.com/vishal-sharma-001/FoodHaven-backend.git/middleware"
+	// "github.com/vishal-sharma-001/FoodHaven-Backend/middleware"
 
-	routes "github.com/vishal-sharma-001/FoodHaven-backend.git/routes"
+	routes "github.com/vishal-sharma-001/FoodHaven-Backend/routes"
 )
 
-func main(){
+func main() {
+
 	port := ":8080"
-	// fserver := http.FileServer(http.Dir("./dir"))
+	router := mux.NewRouter().StrictSlash(true)
 
-	// http.Handle("/", fserver)
-	
-	r := mux.NewRouter()
+	routes.RegisterFoodRoutes(router)
+	routes.RegisterRestaurantsRoutes(router)
 
-	routes.RegisterFoodRoutes(r)
-	routes.RegisterRestaurantsRoutes(r)
-	
+	router.PathPrefix("/").Handler(http.FileServer(http.Dir("./FoodHavenUI")))
+
 	fmt.Printf("Starting the server at http://localhost%v \n", port)
-	
-	err := http.ListenAndServe(port, r)
-	if(err != nil){
-		fmt.Printf("%v",err)
+
+	err := http.ListenAndServe(port, router)
+
+	if err != nil {
+		log.Printf("Error [%s] in starting server", err.Error())
 	}
 }
