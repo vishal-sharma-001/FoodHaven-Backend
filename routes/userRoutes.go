@@ -29,6 +29,11 @@ func RegisterProtectedUserRoutes(r *mux.Router, store *sessions.CookieStore) {
 	r.HandleFunc("/user/edit", func(w http.ResponseWriter, r *http.Request) {
 		handlers.HandleEditUser(w, r, store)
 	}).Methods("POST", "OPTIONS")
+	
+	r.HandleFunc("/user/logout", func(w http.ResponseWriter, r *http.Request) {
+		handlers.HandleLogOut(w, r, store)
+	}).Methods("POST", "OPTIONS")
+
 
 	r.HandleFunc("/user/getaddresses", handlers.GetUserAddresses).Methods("GET", "OPTIONS")
 	r.HandleFunc("/user/addaddress", handlers.HandleAddAddress).Methods("POST", "OPTIONS")

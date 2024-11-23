@@ -155,6 +155,30 @@ func HandleGetUser(w http.ResponseWriter, r *http.Request) {
 	WriteSuccessMessage(w, r, user)
 }
 
+func HandleLogOut(w http.ResponseWriter, r *http.Request, store *sessions.CookieStore) {
+	setupResponse(&w)
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	session, err := store.Get(r, "user_session")
+	if err != nil {
+		WriteError(w, r, http.StatusInternalServerError, "Failed to retrieve session")
+		return
+	}
+
+	session.Values = map[interface{}]interface{}{}
+	session.Options.MaxAge = -1
+
+	if err := session.Save(r, w); err != nil {
+		WriteError(w, r, http.StatusInternalServerError, "Failed to clear session")
+		return
+	}
+
+	WriteSuccessMessage(w, r, "Logged out successfully")
+}
+
 func HandleEditUser(w http.ResponseWriter, r *http.Request, store *sessions.CookieStore) {
 	setupResponse(&w)
 	if r.Method == http.MethodOptions {
