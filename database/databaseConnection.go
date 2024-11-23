@@ -3,6 +3,7 @@ package database
 import (
 	"database/sql"
 	"fmt"
+	"log"
 	"time"
 
 	_ "github.com/lib/pq"
@@ -24,18 +25,14 @@ func ConnectDB() (*sql.DB, error) {
 	for attempts := 1; attempts <= 5; attempts++ {
 		db, err = sql.Open("postgres", connStr)
 		if err == nil {
-			// Try to ping the database
 			err = db.Ping()
 			if err == nil {
 				return db, nil
 			}
 		}
 
-		// If an error occurs, log the attempt and wait before retrying
-		fmt.Printf("Attempt %d: Failed to connect to the database. Retrying in 2 seconds...\n", attempts)
+		log.Printf("Attempt %d: Failed to connect to the database. Retrying in 2 seconds...\n", attempts)
 		time.Sleep(2 * time.Second)
 	}
-
-	// After 5 attempts, return the error
 	return nil, fmt.Errorf("failed to connect to the database after 5 attempts: %w", err)
 }

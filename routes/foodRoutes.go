@@ -10,5 +10,5 @@ import (
 func RegisterFoodRoutes(r *mux.Router) {
 	r.NotFoundHandler = http.NotFoundHandler()
 
-	r.HandleFunc("/food", handlers.GetFoodList).Methods("GET")
+	r.HandleFunc("/fooditems", handlers.GetFoodList).Methods("GET")
 }

@@ -6,10 +6,10 @@ type Restaurants struct {
 	Name         string `json:"name" validate:"required,min=1,max=100"`
 	Rating       int    `json:"rating" validate:"min=0,max=5"`
 	Cuisine      string `json:"cuisine"`
-	DeliveryTime int    `json:"deliverytime"`  // Delivery time is now an integer (in minutes)
+	DeliveryTime int    `json:"deliverytime"`
 	Offers       string `json:"offers"`
 	Locality     string `json:"locality"`
 	CloudImageID string `json:"cloudimageid"`
-	CostForTwo   int    `json:"costfortwo"`   // Added CostForTwo as an integer (in currency)
-	Veg          bool   `json:"veg"`          // Added Veg as a boolean (true or false)
+	CostForTwo   int    `json:"costfortwo"`
+	Veg          bool   `json:"veg"`
 }

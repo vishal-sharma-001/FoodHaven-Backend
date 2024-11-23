@@ -12,5 +12,4 @@ func RegisterRestaurantsRoutes(r *mux.Router) {
 
 	r.HandleFunc("/restaurants", handlers.GetRestaurants).Methods("GET")
 	r.HandleFunc("/cities", handlers.GetCities).Methods("GET")
-	
 }
