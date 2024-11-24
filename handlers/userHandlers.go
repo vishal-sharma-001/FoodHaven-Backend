@@ -29,13 +29,17 @@ func HandleSignUp(w http.ResponseWriter, r *http.Request, store *sessions.Cookie
 		return
 	}
 
+	if user.Name == "" || user.Email == "" || user.Phone == "" || user.Password == "" {
+		WriteError(w, r, http.StatusBadRequest, "All fields are required")
+		return
+	}
+
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
 	if err != nil {
 		WriteError(w, r, http.StatusInternalServerError, "Failed to hash password")
 		return
 	}
 
-	query := "INSERT INTO users (name, email, phone, password) VALUES ($1, $2, $3, $4) RETURNING id"
 	dbClient, err := db.ConnectDB()
 	if err != nil {
 		WriteError(w, r, http.StatusInternalServerError, "Database connection error")
@@ -44,17 +48,19 @@ func HandleSignUp(w http.ResponseWriter, r *http.Request, store *sessions.Cookie
 	defer dbClient.Close()
 
 	var userID int
+	query := "INSERT INTO users (name, email, phone, password) VALUES ($1, $2, $3, $4) RETURNING id"
 	err = dbClient.QueryRow(query, user.Name, user.Email, user.Phone, hashedPassword).Scan(&userID)
-	if err, ok := err.(*pq.Error); ok && err.Code == "23505" {
-		if strings.Contains(err.Message, "users_email_key") {
-			WriteError(w, r, http.StatusConflict, "Email is already registered")
-		} else if strings.Contains(err.Message, "users_phone_key") {
-			WriteError(w, r, http.StatusConflict, "Phone number is already registered")
-		} else {
-			WriteError(w, r, http.StatusInternalServerError, "Database error")
+	if err != nil {
+		if pqErr, ok := err.(*pq.Error); ok && pqErr.Code == "23505" {
+			if strings.Contains(pqErr.Message, "users_email_key") {
+				WriteError(w, r, http.StatusConflict, "Email is already registered")
+			} else if strings.Contains(pqErr.Message, "users_phone_key") {
+				WriteError(w, r, http.StatusConflict, "Phone number is already registered")
+			} else {
+				WriteError(w, r, http.StatusInternalServerError, "Database error")
+			}
+			return
 		}
-		return
-	} else if err != nil {
 		WriteError(w, r, http.StatusInternalServerError, "Failed to register user")
 		return
 	}
@@ -64,6 +70,11 @@ func HandleSignUp(w http.ResponseWriter, r *http.Request, store *sessions.Cookie
 		WriteError(w, r, http.StatusInternalServerError, "Failed to create session")
 		return
 	}
+
+	session.Values["userId"] = userID
+	session.Values["email"] = user.Email
+	session.Values["name"] = user.Name
+	session.Values["phone"] = user.Phone
 
 	session.Options = &sessions.Options{
 		Path:     "/",
@@ -78,6 +89,7 @@ func HandleSignUp(w http.ResponseWriter, r *http.Request, store *sessions.Cookie
 		return
 	}
 
+	user.Id = userID
 	WriteSuccessMessage(w, r, user)
 }
 
