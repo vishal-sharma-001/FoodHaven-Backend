@@ -1,10 +1,15 @@
 package handlers
 
 import (
+	"database/sql"
 	"encoding/json"
+	"fmt"
+	"log"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/gorilla/sessions"
@@ -14,6 +19,8 @@ import (
 	db "github.com/vishal-sharma-001/FoodHaven-Backend/database"
 	"github.com/vishal-sharma-001/FoodHaven-Backend/middleware"
 	"github.com/vishal-sharma-001/FoodHaven-Backend/models"
+
+	cashfree "github.com/cashfree/cashfree-pg/v3"
 )
 
 func HandleSignUp(w http.ResponseWriter, r *http.Request, store *sessions.CookieStore) {
@@ -81,7 +88,7 @@ func HandleSignUp(w http.ResponseWriter, r *http.Request, store *sessions.Cookie
 		MaxAge:   24 * 60 * 60,
 		HttpOnly: false,
 		Secure:   true,
-		SameSite: http.SameSiteNoneMode,
+		SameSite: http.SameSiteLaxMode,
 	}
 
 	if err := session.Save(r, w); err != nil {
@@ -141,11 +148,13 @@ func HandleLogIn(w http.ResponseWriter, r *http.Request, store *sessions.CookieS
 
 	session.Options = &sessions.Options{
 		Path:     "/",
-		MaxAge:   24 * 60 * 60, 
-		HttpOnly: false,
-		Secure:   true, 
-		SameSite: http.SameSiteNoneMode,
+		MaxAge:   86400,                // 1 day
+		HttpOnly: true,                 // This ensures the cookie is only accessible via HTTP
+		Secure:   false,                // Set to true if using HTTPS
+		SameSite: http.SameSiteLaxMode, // Allows cross-origin cookies
 	}
+
+	log.Printf("------->Session Values: %v", session.Values)
 
 	if err := session.Save(r, w); err != nil {
 		WriteError(w, r, http.StatusInternalServerError, "Failed to save session")
@@ -154,7 +163,6 @@ func HandleLogIn(w http.ResponseWriter, r *http.Request, store *sessions.CookieS
 
 	WriteSuccessMessage(w, r, user)
 }
-
 
 func HandleGetUser(w http.ResponseWriter, r *http.Request) {
 	setupResponse(&w)
@@ -253,8 +261,6 @@ func HandleEditUser(w http.ResponseWriter, r *http.Request, store *sessions.Cook
 	WriteSuccessMessage(w, r, updatedUser)
 }
 
-
-
 func GetUserAddresses(w http.ResponseWriter, r *http.Request) {
 	setupResponse(&w)
 
@@ -344,7 +350,6 @@ func HandleAddAddress(w http.ResponseWriter, r *http.Request) {
 
 	address.UserID = user.Id
 
-
 	WriteSuccessMessage(w, r, address)
 }
 
@@ -419,61 +424,253 @@ func HandleEditAddress(w http.ResponseWriter, r *http.Request) {
 }
 
 func HandleDeleteAddress(w http.ResponseWriter, r *http.Request) {
-    setupResponse(&w)
+	setupResponse(&w)
 
-    if r.Method == http.MethodOptions {
-        w.WriteHeader(http.StatusNoContent)
-        return
-    }
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
 
-    if r.Method != http.MethodDelete {
-        WriteError(w, r, http.StatusMethodNotAllowed, "Invalid request method")
-        return
-    }
+	if r.Method != http.MethodDelete {
+		WriteError(w, r, http.StatusMethodNotAllowed, "Invalid request method")
+		return
+	}
 
-    user, ok := r.Context().Value(middleware.ContextKeyUser).(models.User)
-    if !ok {
-        WriteError(w, r, http.StatusUnauthorized, "User not found in context")
-        return
-    }
+	user, ok := r.Context().Value(middleware.ContextKeyUser).(models.User)
+	if !ok {
+		WriteError(w, r, http.StatusUnauthorized, "User not found in context")
+		return
+	}
 
-    vars := mux.Vars(r)
-    idStr, ok := vars["id"]
-    if !ok {
-        WriteError(w, r, http.StatusBadRequest, "Address ID is required in the URL")
-        return
-    }
+	vars := mux.Vars(r)
+	idStr, ok := vars["id"]
+	if !ok {
+		WriteError(w, r, http.StatusBadRequest, "Address ID is required in the URL")
+		return
+	}
 
-    addressID, err := strconv.Atoi(idStr)
-    if err != nil {
-        WriteError(w, r, http.StatusBadRequest, "Invalid address ID")
-        return
-    }
+	addressID, err := strconv.Atoi(idStr)
+	if err != nil {
+		WriteError(w, r, http.StatusBadRequest, "Invalid address ID")
+		return
+	}
 
-    dbClient, err := db.ConnectDB()
-    if err != nil {
-        WriteError(w, r, http.StatusInternalServerError, "Database connection error")
-        return
-    }
-    defer dbClient.Close()
+	dbClient, err := db.ConnectDB()
+	if err != nil {
+		WriteError(w, r, http.StatusInternalServerError, "Database connection error")
+		return
+	}
+	defer dbClient.Close()
 
-    query := `DELETE FROM addresses WHERE id = $1 AND user_id = $2`
-    result, err := dbClient.Exec(query, addressID, user.Id)
-    if err != nil {
-        WriteError(w, r, http.StatusInternalServerError, "Failed to delete address")
-        return
-    }
+	query := `DELETE FROM addresses WHERE id = $1 AND user_id = $2`
+	result, err := dbClient.Exec(query, addressID, user.Id)
+	if err != nil {
+		WriteError(w, r, http.StatusInternalServerError, "Failed to delete address")
+		return
+	}
 
-    affectedRows, err := result.RowsAffected()
-    if err != nil {
-        WriteError(w, r, http.StatusInternalServerError, "Failed to retrieve rows affected")
-        return
-    }
+	affectedRows, err := result.RowsAffected()
+	if err != nil {
+		WriteError(w, r, http.StatusInternalServerError, "Failed to retrieve rows affected")
+		return
+	}
 
-    if affectedRows == 0 {
-        WriteError(w, r, http.StatusNotFound, "Address not found or not authorized")
-        return
-    }
+	if affectedRows == 0 {
+		WriteError(w, r, http.StatusNotFound, "Address not found or not authorized")
+		return
+	}
 
-    WriteSuccessMessage(w, r, map[string]string{"message": "Address deleted successfully"})
+	WriteSuccessMessage(w, r, map[string]string{"message": "Address deleted successfully"})
+}
+
+func CreateOrderHandler(w http.ResponseWriter, r *http.Request) {
+	setupResponse(&w)
+
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	if r.Method != http.MethodPost {
+		WriteError(w, r, http.StatusMethodNotAllowed, "Invalid request method")
+		return
+	}
+
+	clientID := os.Getenv("PAYMENT_CLIENT_ID")
+	secretKey := os.Getenv("PAYMENT_SECRET_KEY")
+	if clientID == "" || secretKey == "" {
+		log.Println("PAYMENT_CLIENT_ID or PAYMENT_SECRET_KEY is missing. Please set them in your environment variables.")
+		WriteError(w, r, http.StatusInternalServerError, "Payment configuration error")
+		return
+	}
+
+	user, ok := r.Context().Value(middleware.ContextKeyUser).(models.User)
+	if !ok {
+		WriteError(w, r, http.StatusUnauthorized, "User not found in context")
+		return
+	}
+
+	var order models.Order
+	if err := json.NewDecoder(r.Body).Decode(&order); err != nil {
+		WriteError(w, r, http.StatusBadRequest, "Invalid request payload")
+		return
+	}
+
+	cashfree.XClientId = &clientID
+	cashfree.XClientSecret = &secretKey
+	cashfree.XEnvironment = cashfree.SANDBOX
+
+	version := time.Now().Format("2006-01-02")
+
+	request := cashfree.CreateOrderRequest{
+		OrderAmount: float64(order.TotalAmount),
+		CustomerDetails: cashfree.CustomerDetails{
+			CustomerId:    strconv.Itoa(user.Id),
+			CustomerPhone: user.Phone,
+			CustomerEmail: &user.Email,
+		},
+		OrderCurrency: "INR",
+		OrderNote: func() *string {
+			note := "Order for FoodHaven"
+			return &note
+		}(),
+	}
+
+	response, httpResponse, err := cashfree.PGCreateOrder(&version, &request, nil, nil, nil)
+	if err != nil {
+		log.Printf("Cashfree order creation failed: %v", err)
+		WriteError(w, r, http.StatusInternalServerError, "Failed to create payment order")
+		return
+	}
+
+	if httpResponse.StatusCode != http.StatusOK {
+		WriteError(w, r, httpResponse.StatusCode, "Payment gateway error")
+		return
+	}
+
+	dbClient, err := db.ConnectDB()
+	if err != nil {
+		WriteError(w, r, http.StatusInternalServerError, "Database connection error")
+		return
+	}
+	defer dbClient.Close()
+
+	err = dbClient.QueryRow(`
+		INSERT INTO orders (user_id, items, total_amount, currency, status) 
+		VALUES ($1, $2, $3, $4, 'pending') 
+		RETURNING id`,
+		user.Id, order.Items, order.TotalAmount, order.Currency).Scan(&order.ID)
+	if err != nil {
+		log.Printf("Database insertion failed: %v", err)
+		WriteError(w, r, http.StatusInternalServerError, "Failed to save order")
+		return
+	}
+
+	WriteSuccessMessage(w, r, map[string]interface{}{
+		"orderID":          order.ID,
+		"paymentSessionId": response.PaymentSessionId,
+		"orderStatus":      response.OrderStatus,
+		"createdAt":        response.CreatedAt,
+	})
+}
+
+func CheckOrderStatusHandler(w http.ResponseWriter, r *http.Request) {
+	setupResponse(&w)
+
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	if r.Method != http.MethodGet {
+		WriteError(w, r, http.StatusMethodNotAllowed, "Invalid request method")
+		return
+	}
+
+	// Extract order ID from query parameters
+	orderID := r.URL.Query().Get("order_id")
+	if orderID == "" {
+		WriteError(w, r, http.StatusBadRequest, "Order ID is required")
+		return
+	}
+
+	// Get client credentials from environment variables
+	clientID := os.Getenv("PAYMENT_CLIENT_ID")
+	secretKey := os.Getenv("PAYMENT_SECRET_KEY")
+	if clientID == "" || secretKey == "" {
+		log.Println("PAYMENT_CLIENT_ID or PAYMENT_SECRET_KEY is missing.")
+		WriteError(w, r, http.StatusInternalServerError, "Payment configuration error")
+		return
+	}
+
+	// Call the Cashfree API to check the payment status
+	url := fmt.Sprintf("https://sandbox.cashfree.com/pg/orders/%s", orderID)
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		log.Printf("Failed to create request: %v", err)
+		WriteError(w, r, http.StatusInternalServerError, "Failed to check payment status")
+		return
+	}
+
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("x-api-version", "2023-08-01")
+	req.SetBasicAuth(clientID, secretKey)
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Printf("Error checking payment status: %v", err)
+		WriteError(w, r, http.StatusInternalServerError, "Failed to fetch payment status")
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("Error checking payment status: HTTP %d", resp.StatusCode)
+		WriteError(w, r, resp.StatusCode, "Payment gateway returned an error")
+		return
+	}
+
+	// Parse the API response
+	var responseBody map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&responseBody); err != nil {
+		log.Printf("Failed to parse response: %v", err)
+		WriteError(w, r, http.StatusInternalServerError, "Invalid payment gateway response")
+		return
+	}
+
+	// Check payment status
+	orderStatus, ok := responseBody["order_status"].(string)
+	if !ok || orderStatus != "PAID" {
+		WriteError(w, r, http.StatusBadRequest, "Payment not completed or invalid response")
+		return
+	}
+
+	// Update the order status in the database
+	dbClient, err := db.ConnectDB()
+	if err != nil {
+		WriteError(w, r, http.StatusInternalServerError, "Database connection error")
+		return
+	}
+	defer dbClient.Close()
+
+	query := `UPDATE orders SET status = 'completed', payment_id = $1, updated_at = NOW() WHERE id = $2`
+	_, err = dbClient.Exec(query, responseBody["cf_payment_id"], orderID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			WriteError(w, r, http.StatusNotFound, "Order not found or does not belong to user")
+			return
+		}
+		log.Printf("Database update failed: %v", err)
+		WriteError(w, r, http.StatusInternalServerError, "Failed to update order")
+		return
+	}
+
+	// Send success response
+	WriteSuccessMessage(w, r, map[string]interface{}{
+		"message":    "Order completed successfully",
+		"order_id":   orderID,
+		"payment_id": responseBody["cf_payment_id"],
+		"status":     orderStatus,
+	})
 }

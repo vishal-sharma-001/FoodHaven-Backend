@@ -38,6 +38,8 @@ func RegisterProtectedUserRoutes(r *mux.Router, store *sessions.CookieStore) {
 	r.HandleFunc("/user/getaddresses", handlers.GetUserAddresses).Methods("GET", "OPTIONS")
 	r.HandleFunc("/user/addaddress", handlers.HandleAddAddress).Methods("POST", "OPTIONS")
 	r.HandleFunc("/user/editaddress/{id}", handlers.HandleEditAddress).Methods("PUT", "OPTIONS")
-	r.HandleFunc("/user/deleteaddress/{id}", handlers.HandleDeleteAddress).Methods("DELETE", "OPTIONS")
-	
+	r.HandleFunc("/user/deleteaddress/{id}", handlers.HandleDeleteAddress).Methods("DELETE", "OPTIONS")	
+
+	r.HandleFunc("/orders/create", handlers.CreateOrderHandler).Methods("POST", "OPTIONS")
+	r.HandleFunc("/orders/confirm", handlers.CheckOrderStatusHandler).Methods("GET", "OPTIONS")
 }

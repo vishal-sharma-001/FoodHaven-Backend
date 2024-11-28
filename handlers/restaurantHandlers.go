@@ -49,6 +49,7 @@ func GetRestaurants(w http.ResponseWriter, r *http.Request) {
 }
 
 func GetCities(w http.ResponseWriter, r *http.Request) {
+	log.Printf("-----------Fetching cities---------------")
 	setupResponse(&w)
 
 	var (
