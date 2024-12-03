@@ -277,10 +277,7 @@ func GetUserAddresses(w http.ResponseWriter, r *http.Request) {
 	}
 	defer dbClient.Close()
 
-	rows, err := dbClient.Query(`
-        SELECT id, user_id, name, street, city, postal_code, phone, is_primary
-        FROM addresses
-        WHERE user_id = $1`, user.Id)
+	rows, err := dbClient.Query(`SELECT id, user_id, name, street, city, postal_code, phone, is_primary FROM addresses WHERE user_id = $1`, user.Id)
 
 	if err != nil {
 		WriteError(w, r, http.StatusInternalServerError, "Database query error")
@@ -314,7 +311,7 @@ func HandleAddAddress(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
-
+	
 	if r.Method != http.MethodPost {
 		WriteError(w, r, http.StatusMethodNotAllowed, "Invalid request method")
 		return
@@ -349,7 +346,6 @@ func HandleAddAddress(w http.ResponseWriter, r *http.Request) {
 	}
 
 	address.UserID = user.Id
-
 	WriteSuccessMessage(w, r, address)
 }
 

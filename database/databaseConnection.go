@@ -17,8 +17,6 @@ func ConnectDB() (*sql.DB, error) {
 	password := os.Getenv("DB_PASSWORD")
 	dbname   := os.Getenv("DB_NAME")
 
-	log.Printf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable", host, port, user, password, dbname)
-
 	connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable", host, port, user, password, dbname)
 
 	var db *sql.DB
