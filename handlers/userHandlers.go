@@ -1,27 +1,32 @@
 package handlers
 
 import (
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/gorilla/sessions"
 	"github.com/lib/pq"
 	"golang.org/x/crypto/bcrypt"
 
+	"github.com/stripe/stripe-go/v81"
+	"github.com/stripe/stripe-go/v81/checkout/session"
+
 	db "github.com/vishal-sharma-001/FoodHaven-Backend/database"
 	"github.com/vishal-sharma-001/FoodHaven-Backend/middleware"
 	"github.com/vishal-sharma-001/FoodHaven-Backend/models"
-
-	cashfree "github.com/cashfree/cashfree-pg/v3"
 )
+
+const stripeSecretKey = "sk_test_51QTm8eLhrle3XiFesp5JSKKB0oMcGiRjpYSPlrt9FJ9RZjn3WpvW71HypVJfdhYNPOw5KjFy13JFK4q4ICPy4LqB00YHCpQVT6"
+const domain = "https://foodhaven.run.place"
+
+func init() {
+	stripe.Key = stripeSecretKey
+}
 
 func HandleSignUp(w http.ResponseWriter, r *http.Request, store *sessions.CookieStore) {
 	setupResponse(&w)
@@ -311,7 +316,7 @@ func HandleAddAddress(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
-	
+
 	if r.Method != http.MethodPost {
 		WriteError(w, r, http.StatusMethodNotAllowed, "Invalid request method")
 		return
@@ -479,7 +484,8 @@ func HandleDeleteAddress(w http.ResponseWriter, r *http.Request) {
 	WriteSuccessMessage(w, r, map[string]string{"message": "Address deleted successfully"})
 }
 
-func CreateOrderHandler(w http.ResponseWriter, r *http.Request) {
+func CreateCheckoutSession(w http.ResponseWriter, r *http.Request) {
+	log.Println("--------------------Handling Initiate Request--------------------")
 	setupResponse(&w)
 
 	if r.Method == http.MethodOptions {
@@ -492,181 +498,83 @@ func CreateOrderHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	clientID := os.Getenv("PAYMENT_CLIENT_ID")
-	secretKey := os.Getenv("PAYMENT_SECRET_KEY")
-	if clientID == "" || secretKey == "" {
-		log.Println("PAYMENT_CLIENT_ID or PAYMENT_SECRET_KEY is missing. Please set them in your environment variables.")
-		WriteError(w, r, http.StatusInternalServerError, "Payment configuration error")
+	var req models.PaymentRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		WriteError(w, r, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
-	user, ok := r.Context().Value(middleware.ContextKeyUser).(models.User)
-	if !ok {
-		WriteError(w, r, http.StatusUnauthorized, "User not found in context")
-		return
+	lineItems := []*stripe.CheckoutSessionLineItemParams{}
+	for _, item := range req.Items {
+		lineItems = append(lineItems, &stripe.CheckoutSessionLineItemParams{
+			PriceData: &stripe.CheckoutSessionLineItemPriceDataParams{
+				Currency: stripe.String("inr"),
+				ProductData: &stripe.CheckoutSessionLineItemPriceDataProductDataParams{
+					Name:        stripe.String(item.Name),
+					Description: stripe.String(fmt.Sprintf("Item from Restaurant ID: %d", item.RestaurantID)),
+					Images:      []*string{stripe.String(fmt.Sprintf("https://storage.cloud.google.com/foodhaven_bucket/Images/%s", item.CloudImageID))},
+				},
+				UnitAmount: stripe.Int64(int64(item.Price * 100)), // Price in cents
+			},
+			Quantity: stripe.Int64(int64(item.Quantity)),
+		})
 	}
 
-	var order models.Order
-	if err := json.NewDecoder(r.Body).Decode(&order); err != nil {
-		WriteError(w, r, http.StatusBadRequest, "Invalid request payload")
-		return
+	params := &stripe.CheckoutSessionParams{
+		UIMode: stripe.String("embedded"),
+		ReturnURL: stripe.String(domain + "/return?session_id={CHECKOUT_SESSION_ID}"),
+		LineItems: lineItems,
+		Mode: stripe.String(string(stripe.CheckoutSessionModePayment)), // Use "payment" for one-time purchases.
 	}
 
-	cashfree.XClientId = &clientID
-	cashfree.XClientSecret = &secretKey
-	cashfree.XEnvironment = cashfree.SANDBOX
-
-	version := time.Now().Format("2006-01-02")
-
-	request := cashfree.CreateOrderRequest{
-		OrderAmount: float64(order.TotalAmount),
-		CustomerDetails: cashfree.CustomerDetails{
-			CustomerId:    strconv.Itoa(user.Id),
-			CustomerPhone: user.Phone,
-			CustomerEmail: &user.Email,
-		},
-		OrderCurrency: "INR",
-		OrderNote: func() *string {
-			note := "Order for FoodHaven"
-			return &note
-		}(),
-	}
-
-	response, httpResponse, err := cashfree.PGCreateOrder(&version, &request, nil, nil, nil)
+	s, err := session.New(params)
 	if err != nil {
-		log.Printf("Cashfree order creation failed: %v", err)
-		WriteError(w, r, http.StatusInternalServerError, "Failed to create payment order")
+		log.Printf("Error creating checkout session: %v", err)
+		WriteError(w, r, http.StatusInternalServerError, "Failed to create checkout session")
 		return
 	}
 
-	if httpResponse.StatusCode != http.StatusOK {
-		WriteError(w, r, httpResponse.StatusCode, "Payment gateway error")
-		return
+	response := struct {
+		ClientSecret string `json:"clientSecret"`
+	}{
+		ClientSecret: s.ClientSecret,
 	}
 
-	dbClient, err := db.ConnectDB()
-	if err != nil {
-		WriteError(w, r, http.StatusInternalServerError, "Database connection error")
-		return
-	}
-	defer dbClient.Close()
-
-	err = dbClient.QueryRow(`
-		INSERT INTO orders (user_id, items, total_amount, currency, status) 
-		VALUES ($1, $2, $3, $4, 'pending') 
-		RETURNING id`,
-		user.Id, order.Items, order.TotalAmount, order.Currency).Scan(&order.ID)
-	if err != nil {
-		log.Printf("Database insertion failed: %v", err)
-		WriteError(w, r, http.StatusInternalServerError, "Failed to save order")
-		return
-	}
-
-	WriteSuccessMessage(w, r, map[string]interface{}{
-		"orderID":          order.ID,
-		"paymentSessionId": response.PaymentSessionId,
-		"orderStatus":      response.OrderStatus,
-		"createdAt":        response.CreatedAt,
-	})
+	WriteSuccessMessage(w, r, response)
 }
 
-func CheckOrderStatusHandler(w http.ResponseWriter, r *http.Request) {
+func RetrieveCheckoutSession(w http.ResponseWriter, r *http.Request) {
+	log.Println("--------------------Handling Retrieve Request--------------------")
 	setupResponse(&w)
-
-	if r.Method == http.MethodOptions {
-		w.WriteHeader(http.StatusNoContent)
-		return
-	}
 
 	if r.Method != http.MethodGet {
 		WriteError(w, r, http.StatusMethodNotAllowed, "Invalid request method")
 		return
 	}
-
-	// Extract order ID from query parameters
-	orderID := r.URL.Query().Get("order_id")
-	if orderID == "" {
-		WriteError(w, r, http.StatusBadRequest, "Order ID is required")
+	
+	log.Printf("R: %v", r)
+	sessionID := r.URL.Query().Get("session_id")
+	if sessionID == "" {
+		WriteError(w, r, http.StatusBadRequest, "Missing session_id")
 		return
 	}
 
-	// Get client credentials from environment variables
-	clientID := os.Getenv("PAYMENT_CLIENT_ID")
-	secretKey := os.Getenv("PAYMENT_SECRET_KEY")
-	if clientID == "" || secretKey == "" {
-		log.Println("PAYMENT_CLIENT_ID or PAYMENT_SECRET_KEY is missing.")
-		WriteError(w, r, http.StatusInternalServerError, "Payment configuration error")
-		return
-	}
 
-	// Call the Cashfree API to check the payment status
-	url := fmt.Sprintf("https://sandbox.cashfree.com/pg/orders/%s", orderID)
-	req, err := http.NewRequest("GET", url, nil)
+	s, err := session.Get(sessionID, nil)
 	if err != nil {
-		log.Printf("Failed to create request: %v", err)
-		WriteError(w, r, http.StatusInternalServerError, "Failed to check payment status")
+		log.Printf("Error retrieving checkout session: %v", err)
+		WriteError(w, r, http.StatusInternalServerError, "Failed to retrieve checkout session")
 		return
 	}
+	log.Printf("%+v",s)
 
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("x-api-version", "2023-08-01")
-	req.SetBasicAuth(clientID, secretKey)
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		log.Printf("Error checking payment status: %v", err)
-		WriteError(w, r, http.StatusInternalServerError, "Failed to fetch payment status")
-		return
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		log.Printf("Error checking payment status: HTTP %d", resp.StatusCode)
-		WriteError(w, r, resp.StatusCode, "Payment gateway returned an error")
-		return
+	response := struct {
+		Status        string `json:"status"`
+		CustomerEmail string `json:"customer_email"`
+	}{
+		Status:        string(s.Status),
+		CustomerEmail: string(s.CustomerDetails.Email),
 	}
 
-	// Parse the API response
-	var responseBody map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&responseBody); err != nil {
-		log.Printf("Failed to parse response: %v", err)
-		WriteError(w, r, http.StatusInternalServerError, "Invalid payment gateway response")
-		return
-	}
-
-	// Check payment status
-	orderStatus, ok := responseBody["order_status"].(string)
-	if !ok || orderStatus != "PAID" {
-		WriteError(w, r, http.StatusBadRequest, "Payment not completed or invalid response")
-		return
-	}
-
-	// Update the order status in the database
-	dbClient, err := db.ConnectDB()
-	if err != nil {
-		WriteError(w, r, http.StatusInternalServerError, "Database connection error")
-		return
-	}
-	defer dbClient.Close()
-
-	query := `UPDATE orders SET status = 'completed', payment_id = $1, updated_at = NOW() WHERE id = $2`
-	_, err = dbClient.Exec(query, responseBody["cf_payment_id"], orderID)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			WriteError(w, r, http.StatusNotFound, "Order not found or does not belong to user")
-			return
-		}
-		log.Printf("Database update failed: %v", err)
-		WriteError(w, r, http.StatusInternalServerError, "Failed to update order")
-		return
-	}
-
-	// Send success response
-	WriteSuccessMessage(w, r, map[string]interface{}{
-		"message":    "Order completed successfully",
-		"order_id":   orderID,
-		"payment_id": responseBody["cf_payment_id"],
-		"status":     orderStatus,
-	})
+	WriteSuccessMessage(w, r, response)
 }

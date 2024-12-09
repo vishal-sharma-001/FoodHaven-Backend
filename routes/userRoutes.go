@@ -23,23 +23,22 @@ func RegisterUserRoutes(r *mux.Router, store *sessions.CookieStore) {
 
 func RegisterProtectedUserRoutes(r *mux.Router, store *sessions.CookieStore) {
 	r.NotFoundHandler = http.NotFoundHandler()
-	
+
 	r.HandleFunc("/user/getuser", handlers.HandleGetUser).Methods("GET", "OPTIONS")
 
 	r.HandleFunc("/user/edit", func(w http.ResponseWriter, r *http.Request) {
 		handlers.HandleEditUser(w, r, store)
 	}).Methods("POST", "OPTIONS")
-	
+
 	r.HandleFunc("/user/logout", func(w http.ResponseWriter, r *http.Request) {
 		handlers.HandleLogOut(w, r, store)
 	}).Methods("POST", "OPTIONS")
 
-
 	r.HandleFunc("/user/getaddresses", handlers.GetUserAddresses).Methods("GET", "OPTIONS")
 	r.HandleFunc("/user/addaddress", handlers.HandleAddAddress).Methods("POST", "OPTIONS")
 	r.HandleFunc("/user/editaddress/{id}", handlers.HandleEditAddress).Methods("PUT", "OPTIONS")
-	r.HandleFunc("/user/deleteaddress/{id}", handlers.HandleDeleteAddress).Methods("DELETE", "OPTIONS")	
+	r.HandleFunc("/user/deleteaddress/{id}", handlers.HandleDeleteAddress).Methods("DELETE", "OPTIONS")
 
-	r.HandleFunc("/orders/create", handlers.CreateOrderHandler).Methods("POST", "OPTIONS")
-	r.HandleFunc("/orders/confirm", handlers.CheckOrderStatusHandler).Methods("GET", "OPTIONS")
+	r.HandleFunc("/payment/create-checkout-session", handlers.CreateCheckoutSession).Methods("POST", "OPTIONS")
+	r.HandleFunc("/payment/session-status", handlers.RetrieveCheckoutSession).Methods("GET", "OPTIONS")
 }

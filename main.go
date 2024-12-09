@@ -73,7 +73,7 @@ func main() {
         Addr:      port,
         Handler: router,
         TLSConfig: &tls.Config{
-            MinVersion: tls.VersionTLS12,
+            MinVersion: tls.VersionTLS13,
         },
     }
 
