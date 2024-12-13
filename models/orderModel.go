@@ -19,7 +19,7 @@ type Order struct {
 type OrderItem struct {
 	ID           int    `json:"id"`
 	Name         string `json:"name"`
-	Price        int    `json:"price"`
+	Price        float64    `json:"price"`
 	CloudImageID string `json:"cloudimageid"`
 	Quantity     int    `json:"quantity"`
 	RestaurantID int    `json:"restrauntId"`
@@ -27,4 +27,5 @@ type OrderItem struct {
 
 type PaymentRequest struct {
 	Items   []OrderItem `json:"items"`
+	Amount  int `json:"amount"`
 }
