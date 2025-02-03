@@ -1,8 +1,8 @@
 # Variables
-PROJECT_NAME = foodhaven-442912
+PROJECT_NAME = foodhaven-449707
 IMAGE_NAME = foodhaven
-REPO_NAME = development
-REGISTRY_LOCATION = asia-south2-docker.pkg.dev
+REPO_NAME = foodhaven
+REGISTRY_LOCATION = us-central1-docker.pkg.dev
 FULL_IMAGE_PATH = $(REGISTRY_LOCATION)/$(PROJECT_NAME)/$(REPO_NAME)/$(IMAGE_NAME)
 TAG = latest
 

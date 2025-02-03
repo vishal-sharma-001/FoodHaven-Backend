@@ -1,17 +1,17 @@
 package main
 
 import (
-    "crypto/tls"
-    "log"
-    "net/http"
-    "os"
+	"crypto/tls"
+	"log"
+	"net/http"
+	"os"
 
-    "github.com/gorilla/mux"
-    "github.com/gorilla/sessions"
-    "github.com/joho/godotenv"
+	"github.com/gorilla/mux"
+	"github.com/gorilla/sessions"
+	"github.com/joho/godotenv"
 
-    "github.com/vishal-sharma-001/FoodHaven-Backend/middleware"
-    "github.com/vishal-sharma-001/FoodHaven-Backend/routes"
+	"github.com/vishal-sharma-001/FoodHaven-Backend/middleware"
+	"github.com/vishal-sharma-001/FoodHaven-Backend/routes"
 )
 
 func main() {
@@ -57,8 +57,8 @@ func main() {
         http.ServeFile(w, r, uiDir+"/index.html")
     })
 
-    tlsCertPath := "/etc/tls/fullchain.pem"
-    tlsKeyPath := "/etc/tls/ssl-private-key.key"
+    tlsCertPath := "/etc/tls/tls.crt"
+    tlsKeyPath := "/etc/tls/tls.key"
 
     if _, err := os.Stat(tlsCertPath); os.IsNotExist(err) {
         log.Fatalf("TLS certificate file not found at %v", tlsCertPath)
