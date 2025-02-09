@@ -8,7 +8,6 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/gorilla/sessions"
-	"github.com/joho/godotenv"
 
 	"github.com/vishal-sharma-001/FoodHaven-Backend/middleware"
 	"github.com/vishal-sharma-001/FoodHaven-Backend/routes"
@@ -17,10 +16,6 @@ import (
 func main() {
     port := ":8080"
     router := mux.NewRouter().StrictSlash(true)
-
-    if err := godotenv.Load(); err != nil {
-        log.Println("Warning: .env file not found. Falling back to system environment variables.")
-    }
 
     sessionKey := os.Getenv("SESSION_KEY")
     if sessionKey == "" {
